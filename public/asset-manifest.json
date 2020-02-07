@@ -1,0 +1,24 @@
+{
+  "files": {
+    "main.css": "/static/css/main.bd6c86d5.chunk.css",
+    "main.js": "/static/js/main.d5334054.chunk.js",
+    "main.js.map": "/static/js/main.d5334054.chunk.js.map",
+    "runtime-main.js": "/static/js/runtime-main.1991d113.js",
+    "runtime-main.js.map": "/static/js/runtime-main.1991d113.js.map",
+    "static/js/2.c1b88e5b.chunk.js": "/static/js/2.c1b88e5b.chunk.js",
+    "static/js/2.c1b88e5b.chunk.js.map": "/static/js/2.c1b88e5b.chunk.js.map",
+    "index.html": "/index.html",
+    "precache-manifest.cdb7833d0ad843669517ea654825d5ab.js": "/precache-manifest.cdb7833d0ad843669517ea654825d5ab.js",
+    "service-worker.js": "/service-worker.js",
+    "static/css/main.bd6c86d5.chunk.css.map": "/static/css/main.bd6c86d5.chunk.css.map",
+    "static/media/fonts.module.scss": "/static/media/OpenSans-Regular-webfont.c8ffdeb3.woff",
+    "static/media/SideMenu.module.scss": "/static/media/captain-sparrow.c44032c4.jpg",
+    "static/media/react_logo.svg": "/static/media/react_logo.5d5d9eef.svg"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.1991d113.js",
+    "static/js/2.c1b88e5b.chunk.js",
+    "static/css/main.bd6c86d5.chunk.css",
+    "static/js/main.d5334054.chunk.js"
+  ]
+}
