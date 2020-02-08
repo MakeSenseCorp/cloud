@@ -87,7 +87,7 @@ MkSCloud.prototype.FindSessionBySocket = function (socket) {
 
 MkSCloud.prototype.KeepAliveMonitorHandler = function () {
 	console.log(this.ModuleName, "KeepAliveMonitorHandler");
-	this.SendKeepAliveEvent();
+	
 }
 
 MkSCloud.prototype.RouteMessageToGateway = function (packet) {
@@ -98,8 +98,16 @@ MkSCloud.prototype.RouteMessageToWebface = function (packet) {
 	
 }
 
+MkSCloud.prototype.Monitor = function() {
+	if (this.GatewayList !== undefined) {
+		console.log("Gatwaysession list count", this.GatewayList.length);
+	}
+	 setTimeout(this.Monitor, 1000);
+}
+
 MkSCloud.prototype.Start = function () {
 	var self = this;
+	//this.Monitor();
 	
 	// Create listener server
 	this.GatewayServer = http.createServer(function(request, response) {
@@ -226,7 +234,6 @@ MkSCloud.prototype.Start = function () {
 		var wsHandle   = self.WSGatewayClients.push(connection) - 1;
 
 		console.log("\n", self.ModuleName, request.httpRequest.headers, "\n");
-
 		connection.on('message', function(message) {
 			if (message.type === 'utf8') {
 				connection.LastMessageData = message.utf8Data;
@@ -246,23 +253,23 @@ MkSCloud.prototype.Start = function () {
 				}
 
 				if ("HANDSHAKE" == jsonData.header.message_type) {
-					if (request.httpRequest.headers.UserKey === undefined || jsonData.key === undefined) {
+					if (request.httpRequest.headers.userkey === undefined || jsonData.user.key === undefined) {
 						console.log(self.ModuleName, (new Date()), "Invalid HANDSHAKE request ...");
 						connection.close();
 						return;
 					}
 
-					if (request.httpRequest.headers.UserKey != jsonData.key) {
-						console.log(self.ModuleName, (new Date()), "Invalid HANDSHAKE request (3) ...");
+					if (request.httpRequest.headers.userkey != jsonData.user.key) {
+						console.log(self.ModuleName, (new Date()), "Invalid HANDSHAKE request ...");
 						connection.close();
 						return;
 					}
 
-					console.log(self.ModuleName, (new Date()), "Register new gateway session:", jsonData.key);
+					console.log(self.ModuleName, (new Date()), "Register new gateway session:", jsonData.user.key);
 					// Save user key in this request, will be used to delete user from list
-					request.httpRequest.headers.UserKey = jsonData.key;
+					request.httpRequest.headers.userkey = jsonData.user.key;
 					// Get all session for this key
-					var sessionList = self.GatewayList[jsonData.key];
+					var sessionList = self.GatewayList[jsonData.user.key];
 					// Is this key exist in cloud?
 					if (undefined === sessionList) {
 						// Allocate list for this new key
@@ -271,7 +278,31 @@ MkSCloud.prototype.Start = function () {
 
 					// Append new webface session to the list
 					sessionList.push(new GatewaySession(connection));
-					self.GatewayList[jsonData.key] = sessionList;
+					self.GatewayList[jsonData.user.key] = sessionList;
+
+					// Respond to Gatway with HANDSHAKE message
+					var packet = {
+						header: {
+							message_type: "HANDSHAKE",
+							destination: "GATEWAY",
+							source: "CLOUD",
+							direction: "response"
+						},
+						data: {
+							header: {
+								command: "",
+								timestamp: 0
+							},
+							payload: {	}
+						},
+						user: {
+							key: jsonData.user.key
+						},
+						piggybag: {
+							identifier: 0
+						}
+					}
+					connection.send(JSON.stringify(packet));
 				} else {
 				}
 			}
@@ -279,7 +310,7 @@ MkSCloud.prototype.Start = function () {
 
 		connection.on('close', function(conn) {
 			// Remove application session
-			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.UserKey);
+			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.userkey);
 			// Get all sessions for this key
 			var sessions = self.WebfaceList[request.httpRequest.headers.UserKey];
 			if (undefined !== sessions) {
