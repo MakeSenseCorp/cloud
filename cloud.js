@@ -143,37 +143,46 @@ MkSCloud.prototype.Start = function () {
 	// Register application websocket.
 	this.WSWebface.on('request', function(request) {
 		// Accept new connection request
-		var connection = request.accept('echo-protocol', request.origin);
-		var wsHandle   = self.WSWebfaceClients.push(connection) - 1;
-
-		self.WebfaceIndexer += 1;
-		connection.WebfaceIndexer = self.WebfaceIndexer;
+		var connection 		  = request.accept('echo-protocol', request.origin);
+		connection.ws_handler = self.WSWebfaceClients.push(connection) - 1;
+		connection.send(JSON.stringify({
+			header: {
+				message_type: "DIRECT",
+				destination: "GATEWAY",
+				source: "CLOUD",
+				direction: "request"
+			},
+			data: {
+				header: {
+					command: "webface_new_connection",
+					timestamp: 0
+				},
+				payload: {	}
+			},
+			user: {
+				key: this.CloudUserKey
+			},
+			additional: {
+				cloud: {
+					handler: connection.ws_handler
+				}
+			},
+			piggybag: {
+				identifier: 0
+			}
+		}));
 		
 		connection.on('message', function(message) {
-			if (message.type === 'utf8') {
-				connection.LastMessageData = message.utf8Data;
-				jsonData = JSON.parse(message.utf8Data);
-				
-				console.log("\n", self.ModuleName, "Webface -> Cloud", jsonData, "\n");
-				if ("HANDSHAKE" == jsonData.header.message_type) {
-					console.log(self.ModuleName, (new Date()), "Register new application session:", jsonData.key);
-					// Save user key in this request, will be used to delete user from list
-					request.httpRequest.headers.UserKey = jsonData.key;
-					// Get all session for this key
-					var sessionList = self.WebfaceList[jsonData.key];
-					// Is this key exist in cloud?
-					if (undefined === sessionList) {
-						// Allocate list for this new key
-						sessionList = []
-					}
+			jsonData = JSON.parse(message.utf8Data);
 
-					// Append new webface session to the list
-					sessionList.push(new WebfaceSession(connection));
-					self.WebfaceList[jsonData.key] = sessionList;
-				} else {
-
+			jsonData.piggybag = {
+				cloud: {
+					handler: connection.ws_handler
 				}
-			}
+			};
+
+			message.utf8Data = JSON.stringify(jsonData);
+			connection.send(message);
 		});
 		
 		connection.on('close', function(conn) {
