@@ -40,7 +40,7 @@ function MkSCloud (cloudInfo) {
 	this.RestApi 				= express();
 	this.Database 				= null;
 	this.GatewayList			= {}; 
-	this.WebfaceList			= {}; // For each key this structure have WebfaceSession instance
+	// this.WebfaceList			= {}; // For each key this structure have WebfaceSession instance
 	this.WebfaceIndexer 		= 0;
 	
 	// Monitoring
@@ -70,32 +70,8 @@ MkSCloud.prototype.InitRouter = function (server) {
 	var self = this;
 }
 
-MkSCloud.prototype.FindSessionBySocket = function (socket) {
-	for (var key in this.WebfaceList) {
-		var sessions = this.WebfaceList[key];
-		if (undefined !== sessions) {
-			for (idx = 0; idx < sessions.length; idx++) {
-				session = sessions[idx];
-				if (socket == session.Socket)
-					return session;
-			}
-		}
-	}
-	
-	return null;
-}
-
 MkSCloud.prototype.KeepAliveMonitorHandler = function () {
 	console.log(this.ModuleName, "KeepAliveMonitorHandler");
-	
-}
-
-MkSCloud.prototype.RouteMessageToGateway = function (packet) {
-
-}
-
-MkSCloud.prototype.RouteMessageToWebface = function (packet) {
-	
 }
 
 MkSCloud.prototype.Monitor = function() {
@@ -107,7 +83,6 @@ MkSCloud.prototype.Monitor = function() {
 
 MkSCloud.prototype.Start = function () {
 	var self = this;
-	//this.Monitor();
 	
 	// Create listener server
 	this.GatewayServer = http.createServer(function(request, response) {
@@ -145,32 +120,36 @@ MkSCloud.prototype.Start = function () {
 		// Accept new connection request
 		var connection 		  = request.accept('echo-protocol', request.origin);
 		connection.ws_handler = self.WSWebfaceClients.push(connection) - 1;
-		connection.send(JSON.stringify({
-			header: {
-				message_type: "DIRECT",
-				destination: "GATEWAY",
-				source: "CLOUD",
-				direction: "request"
-			},
-			data: {
+
+		var gatewaySessions = self.GatewayList[request.httpRequest.headers.userkey];
+		for (var idx = 0; idx < gatewaySessions.length; idx++) {
+			gatewaySessions[i].Socket.send(JSON.stringify({
 				header: {
-					command: "webface_new_connection",
-					timestamp: 0
+					message_type: "DIRECT",
+					destination: "GATEWAY",
+					source: "CLOUD",
+					direction: "request"
 				},
-				payload: {	}
-			},
-			user: {
-				key: this.CloudUserKey
-			},
-			additional: {
-				cloud: {
-					handler: connection.ws_handler
+				data: {
+					header: {
+						command: "webface_new_connection",
+						timestamp: 0
+					},
+					payload: {	}
+				},
+				user: {
+					key: ""
+				},
+				additional: {
+					cloud: {
+						handler: connection.ws_handler
+					}
+				},
+				piggybag: {
+					identifier: 0
 				}
-			},
-			piggybag: {
-				identifier: 0
-			}
-		}));
+			}));
+		}
 		
 		connection.on('message', function(message) {
 			jsonData = JSON.parse(message.utf8Data);
@@ -187,50 +166,36 @@ MkSCloud.prototype.Start = function () {
 		
 		connection.on('close', function(conn) {
 			// Remove application session
-			console.log (self.ModuleName, (new Date()), "Unregister application session:", request.httpRequest.headers.UserKey);
-			// Get all sessions for this key
-			var sessions = self.WebfaceList[request.httpRequest.headers.UserKey];
-			if (undefined !== sessions) {
-				for (idx = 0; idx < sessions.length; idx++) {
-					session = sessions[idx];
-					// Is this session we looking for?
-					if (session.Socket == connection) {
-						// Send messages to gateway about webface session disconnection
-						for (var key in self.NodeList) {
-							var item = self.NodeList[key];
-							var packet = {
-								header: {
-									message_type: "DIRECT",
-									destination: "GATEWAY",
-									source: "CLOUD",
-									direction: "request"
-								},
-								data: {
-									header: {
-										command: "unregister_on_node_change",
-										timestamp: 0
-									},
-									payload: {
-										"webface_indexer": connection.WebfaceIndexer,
-										"user_key": key
-									}
-								},
-								user: {
-									key: { }
-								},
-								additional: { },
-								piggybag: {
-									identifier: 0
-								}
-							}
-							item.Socket.send(JSON.stringify(packet));
+			console.log (self.ModuleName, (new Date()), "Unregister application session:", request.httpRequest.headers.userkey);
+			var gatewaySessions = self.GatewayList[request.httpRequest.headers.userkey];
+			for (var idx = 0; idx < gatewaySessions.length; idx++) {
+				gatewaySessions[i].Socket.send(JSON.stringify({
+					header: {
+						message_type: "DIRECT",
+						destination: "GATEWAY",
+						source: "CLOUD",
+						direction: "request"
+					},
+					data: {
+						header: {
+							command: "webface_remove_connection",
+							timestamp: 0
+						},
+						payload: {	}
+					},
+					user: {
+						key: ""
+					},
+					additional: {
+						cloud: {
+							handler: connection.ws_handler
 						}
-						sessions.splice(idx, 1);
-						self.WebfaceList[request.httpRequest.headers.UserKey] = sessions;
-						continue;
+					},
+					piggybag: {
+						identifier: 0
 					}
-				}
-			}
+				}));
+			}		
 			// Removing connection from the list.
 			self.WSWebfaceClients.splice(wsHandle, 1); // Consider to remove this list, we have a connections map.
 		});
@@ -313,6 +278,8 @@ MkSCloud.prototype.Start = function () {
 					}
 					connection.send(JSON.stringify(packet));
 				} else {
+					// TODO - Develope gateway to webface
+					
 				}
 			}
 		});
@@ -320,20 +287,6 @@ MkSCloud.prototype.Start = function () {
 		connection.on('close', function(conn) {
 			// Remove application session
 			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.userkey);
-			// Get all sessions for this key
-			var sessions = self.WebfaceList[request.httpRequest.headers.UserKey];
-			if (undefined !== sessions) {
-				for (idx = 0; idx < sessions.length; idx++) {
-					session = sessions[idx];
-					// Is this session we looking for?
-					if (session.Socket == connection) {
-						// Do something with disconnected session
-						sessions.splice(idx, 1);
-						self.WebfaceList[request.httpRequest.headers.UserKey] = sessions;
-						continue;
-					}
-				}
-			}
 			// Removing connection from the list.
 			self.WSWebfaceClients.splice(wsHandle, 1); // Consider to remove this list, we have a connections map.
 		});
