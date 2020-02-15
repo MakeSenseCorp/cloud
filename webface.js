@@ -47,8 +47,13 @@ MkSWebface.prototype.InitRouter = function (server) {
 	server.post('/api/get/nodes', function(req, res) {
 		console.log(self.ModuleName, "/api/get/nodes");
 		if (req.body.data != undefined) {
-			var user_id = req.body.data.user_id;
-			// TODO - Websocket request to Gateway
+			var user_id  = req.body.data.user_id;
+			var user_key = req.body.data.key;
+			nodes = self.Cloud.GetNodesByKey(user_key);
+			res.json({error:"none", nodes: {
+				status: "OK",
+				data: nodes
+			}});
 		} else {
 			res.json({error:"no post params"});
 		}

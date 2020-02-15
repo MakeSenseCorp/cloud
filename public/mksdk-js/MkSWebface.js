@@ -1,7 +1,7 @@
 function MkSWebface () {
 	self = this;
 	
-	this.RestAPIPort 		= 8080;
+	this.RestAPIPort 		= 8083;
 	this.RestAPIUrl 		= "http://" + MkSGlobal.MakeSenseDomain;
 	this.RestAPIFullUrl 	= this.RestAPIUrl.concat(":", this.RestAPIPort);
 	this.WSState 			= "DISCONN";
@@ -23,6 +23,7 @@ MkSWebface.prototype.Login = function (usr, pwd, callback) {
 }
 
 MkSWebface.prototype.GetUserNodeList = function (callback) {
+	console.log("MkSWebface.prototype.GetUserNodeList");
 	var RequestData = {
 		request: "get_user_node_list",
 		data: {
@@ -30,8 +31,9 @@ MkSWebface.prototype.GetUserNodeList = function (callback) {
 			user_id: MkSGlobal.UserId
 		}
 	};
-	console.log(RequestData);
+	// console.log(RequestData);
 	MkSGlobal.AjaxPostRequest(this.RestAPIFullUrl, "/api/get/nodes", "json", RequestData, function(response) {
+		console.log("get_user_node_list", response);
 		callback(response);
 	});
 }

@@ -3,6 +3,7 @@ var express     	= require('express');
 var bodyParser  	= require('body-parser')
 var WebSocketServer = require('websocket').server;
 var http            = require('http');
+var protocol 		= require('./protocol-mks.js')();
 
 function GatewaySession (sock) {
 	self = this;
@@ -15,18 +16,22 @@ function GatewaySession (sock) {
 function WebfaceSession (sock) {
 	self = this;
 	
-	this.Socket = sock;
+	this.Socket 	= sock;
+	this.UserKey 	= "";
 	
 	return this;
 }
 
 function MkSCloud (cloudInfo) {
 	var self = this;
+	this.Protocol 				= new protocol({});
 	// Static variables section
 	this.ModuleName 			= "[Cloud]#";
 	this.GatewayWebsocketPort 	= cloudInfo.GatewayWebSocket;
 	this.WebfaceWebsocketPort 	= cloudInfo.WebfaceWebSocket;
 	this.RestAPIPort 			= cloudInfo.CloudRestApi;
+
+	this.GatewayNodeList 		= {}; // Map UserKey -> [] (List of nodes registered in gateway's local database)
 
 	this.WSGatewayClients 		= [];
 	this.WSWebfaceClients 		= [];
@@ -40,7 +45,7 @@ function MkSCloud (cloudInfo) {
 	this.RestApi 				= express();
 	this.Database 				= null;
 	this.GatewayList			= {}; 
-	// this.WebfaceList			= {}; // For each key this structure have WebfaceSession instance
+	this.WebfaceList			= {}; // For each key this structure have WebfaceSession instance
 	this.WebfaceIndexer 		= 0;
 	
 	// Monitoring
@@ -79,6 +84,81 @@ MkSCloud.prototype.Monitor = function() {
 		console.log("Gatwaysession list count", this.GatewayList.length);
 	}
 	 setTimeout(this.Monitor, 1000);
+}
+
+MkSCloud.prototype.GetNodesByKey = function(key) {
+	var nodeList 	= this.GatewayNodeList[key];
+	var nodes 		= [];
+
+	for (var i = 0; i < nodeList.length; i++) {
+		nodes = nodes.concat(nodeList[i].nodes);
+	}
+
+	return nodes;
+}
+
+MkSCloud.prototype.WebfaceHandshakeRequestToGatewayByKey = function(key, handler) {
+	var gatewaySessions = this.GatewayList[key];
+	if (gatewaySessions === undefined) {
+		return false;
+	}
+
+	var packet = this.Protocol.GenerateRequest({
+		message_type: "HANDSHAKE",
+		destination: "GATEWAY",
+		source: "CLOUD",
+		command: "webface_new_connection",
+		payload: { },
+		key: key,
+		additional: { },
+		piggybag: {
+			cloud: {
+				handler: handler
+			}
+		}
+	});
+
+	for (var idx = 0; idx < gatewaySessions.length; idx++) {		
+		gatewaySessions[idx].Socket.send(JSON.stringify(packet));
+	}
+
+	return true;
+}
+
+MkSCloud.prototype.SendPacketToGatewaysByKey = function(key, command, payload, additional, piggybag) {
+	var gatewaySessions = this.GatewayList[key];
+	if (gatewaySessions === undefined) {
+		return false;
+	}
+
+	var packet = this.Protocol.GenerateRequest({
+		message_type: "DIRECT",
+		destination: "GATEWAY",
+		source: "CLOUD",
+		command: "command",
+		payload: payload,
+		key: key,
+		additional: additional,
+		piggybag: piggybag
+	});
+
+	for (var idx = 0; idx < gatewaySessions.length; idx++) {		
+		gatewaySessions[idx].Socket.send(JSON.stringify(packet));
+	}
+
+	return true;
+}
+
+MkSCloud.prototype.ProxyPacketToGateway = function(key, packet) {
+	console.log(this.ModuleName, "Proxy message", key);
+	var gatewaySessions = this.GatewayList[key];
+	for (var idx = 0; idx < gatewaySessions.length; idx++) {
+		gatewaySessions[idx].Socket.send(JSON.stringify(packet));
+	}
+}
+
+MkSCloud.prototype.ProxyPacketToWebface = function(key, message) {
+
 }
 
 MkSCloud.prototype.Start = function () {
@@ -121,83 +201,74 @@ MkSCloud.prototype.Start = function () {
 		var connection 		  = request.accept('echo-protocol', request.origin);
 		connection.ws_handler = self.WSWebfaceClients.push(connection) - 1;
 
-		var gatewaySessions = self.GatewayList[request.httpRequest.headers.userkey];
-		for (var idx = 0; idx < gatewaySessions.length; idx++) {
-			gatewaySessions[i].Socket.send(JSON.stringify({
-				header: {
-					message_type: "DIRECT",
-					destination: "GATEWAY",
-					source: "CLOUD",
-					direction: "request"
-				},
-				data: {
-					header: {
-						command: "webface_new_connection",
-						timestamp: 0
-					},
-					payload: {	}
-				},
-				user: {
-					key: ""
-				},
-				additional: {
-					cloud: {
-						handler: connection.ws_handler
-					}
-				},
-				piggybag: {
-					identifier: 0
-				}
-			}));
-		}
-		
+		self.WebfaceList[connection.ws_handler] = new WebfaceSession(connection);
 		connection.on('message', function(message) {
-			jsonData = JSON.parse(message.utf8Data);
+			if (message.type === 'utf8') {
+				jsonData = JSON.parse(message.utf8Data);
 
-			jsonData.piggybag = {
-				cloud: {
-					handler: connection.ws_handler
+				console.log("\n", self.ModuleName, "Cloud -> Gateway", jsonData, "\n");
+				if (jsonData.header === undefined) {
+					console.log(self.ModuleName, (new Date()), "Invalid request ...");
+					return;
 				}
-			};
 
-			message.utf8Data = JSON.stringify(jsonData);
-			connection.send(message);
+				if (jsonData.header.message_type === undefined) {
+					console.log(self.ModuleName, (new Date()), "Invalid request ...");
+					return;
+				}
+				
+				if ("HANDSHAKE" == jsonData.header.message_type) {
+					// Store userkey of this session. LAter will be used to identify gateawy.
+					self.WebfaceList[connection.ws_handler].UserKey = jsonData.user.key;
+					self.WebfaceHandshakeRequestToGatewayByKey(jsonData.user.key, connection.ws_handler);
+				} else {
+					jsonData.piggybag.cloud = {
+						handler: connection.ws_handler
+					};
+	
+					self.ProxyPacketToGateway(self.WebfaceList[connection.ws_handler].UserKey, jsonData);
+				}
+			}
 		});
 		
 		connection.on('close', function(conn) {
 			// Remove application session
 			console.log (self.ModuleName, (new Date()), "Unregister application session:", request.httpRequest.headers.userkey);
 			var gatewaySessions = self.GatewayList[request.httpRequest.headers.userkey];
-			for (var idx = 0; idx < gatewaySessions.length; idx++) {
-				gatewaySessions[i].Socket.send(JSON.stringify({
-					header: {
-						message_type: "DIRECT",
-						destination: "GATEWAY",
-						source: "CLOUD",
-						direction: "request"
-					},
-					data: {
+			if (gatewaySessions !== undefined) {
+				for (var idx = 0; idx < gatewaySessions.length; idx++) {
+					gatewaySessions[i].Socket.send(JSON.stringify({
 						header: {
-							command: "webface_remove_connection",
-							timestamp: 0
+							message_type: "DIRECT",
+							destination: "GATEWAY",
+							source: "CLOUD",
+							direction: "request"
 						},
-						payload: {	}
-					},
-					user: {
-						key: ""
-					},
-					additional: {
-						cloud: {
-							handler: connection.ws_handler
+						data: {
+							header: {
+								command: "webface_remove_connection",
+								timestamp: 0
+							},
+							payload: {	}
+						},
+						user: {
+							key: ""
+						},
+						additional: {
+							cloud: {
+								handler: connection.ws_handler
+							}
+						},
+						piggybag: {
+							identifier: 0
 						}
-					},
-					piggybag: {
-						identifier: 0
-					}
-				}));
-			}		
-			// Removing connection from the list.
-			self.WSWebfaceClients.splice(wsHandle, 1); // Consider to remove this list, we have a connections map.
+					}));
+				}
+			}
+			if (connection.ws_handler !== undefined) {
+				// Removing connection from the list.
+				self.WSWebfaceClients.splice(connection.ws_handler, 1); // Consider to remove this list, we have a connections map.
+			}
 		});
 	});
 
@@ -205,7 +276,7 @@ MkSCloud.prototype.Start = function () {
 	this.WSGateway.on('request', function(request) {
 		// Accept new connection request
 		var connection = request.accept('echo-protocol', request.origin);
-		var wsHandle   = self.WSGatewayClients.push(connection) - 1;
+		var ws_handler = self.WSGatewayClients.push(connection) - 1;
 
 		console.log("\n", self.ModuleName, request.httpRequest.headers, "\n");
 		connection.on('message', function(message) {
@@ -254,6 +325,15 @@ MkSCloud.prototype.Start = function () {
 					sessionList.push(new GatewaySession(connection));
 					self.GatewayList[jsonData.user.key] = sessionList;
 
+					var nodeList = self.GatewayNodeList[jsonData.user.key];
+					if (undefined === nodeList) {
+						nodeList = []
+					}
+
+					jsonData.data.payload.ws_handler = ws_handler;
+					nodeList.push(jsonData.data.payload);
+					self.GatewayNodeList[jsonData.user.key] = nodeList;
+
 					// Respond to Gatway with HANDSHAKE message
 					var packet = {
 						header: {
@@ -278,8 +358,36 @@ MkSCloud.prototype.Start = function () {
 					}
 					connection.send(JSON.stringify(packet));
 				} else {
-					// TODO - Develope gateway to webface
-					
+					if (jsonData.header.destination == "CLOUD") {
+						switch (jsonData.data.header.command) {
+							case "update_node_list":
+								var nodeList = self.GatewayNodeList[jsonData.user.key];
+								if (undefined === nodeList) {
+									nodeList = []
+								}
+
+								for (item in jsonData.data.payload.nodes) {
+									for (node in nodeList) {
+										if (item.uuid == node.uuid) {
+											node.online = item.uuid;
+											break;
+										}
+									}
+								}
+								
+								self.GatewayNodeList[jsonData.user.key] = nodeList;
+								break;
+							default:
+								break;
+						}
+					} else {
+						// TODO - Develope gateway to webface
+						if (jsonData.piggybag.cloud !== undefined) {
+							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(message.utf8Data);
+						} else {
+							console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud]", jsonData);
+						}
+					}
 				}
 			}
 		});
@@ -288,7 +396,7 @@ MkSCloud.prototype.Start = function () {
 			// Remove application session
 			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.userkey);
 			// Removing connection from the list.
-			self.WSWebfaceClients.splice(wsHandle, 1); // Consider to remove this list, we have a connections map.
+			self.WSWebfaceClients.splice(ws_handler, 1); // Consider to remove this list, we have a connections map.
 		});
 	});
 }

@@ -1,8 +1,8 @@
 function MkSCommon () {
 	self = this;
 	
-	this.MakeSenseDomain = "10.0.0.14";
-	this.MakeSenseServerUrl = "http://" + this.MakeSenseDomain + ":8080/";
+	this.MakeSenseDomain = "10.0.0.10";
+	this.MakeSenseServerUrl = "http://" + this.MakeSenseDomain + ":8083/";
   	
   	this.UserDEVKey = "ac6de837-7863-72a9-c789-a0aae7e9d93e" || localStorage.getItem("key");
   	this.UserId = 1 || localStorage.getItem("userId");

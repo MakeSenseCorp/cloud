@@ -3,8 +3,8 @@ function MkSGateway (key) {
 	
 	this.WS 				= null;
 	this.Key 				= key;
-	this.RestAPIPort 		= 8081;
-	this.WSServerPort		= 1982;
+	this.RestAPIPort 		= 8084;
+	this.WSServerPort		= 1983;
 	this.RestAPIUrl 		= "http://" + MkSGlobal.MakeSenseDomain;
 	this.WSServerUrl		= "ws://" + MkSGlobal.MakeSenseDomain;
 	this.RestAPIFullUrl 	= this.RestAPIUrl.concat(":", this.RestAPIPort);
@@ -100,7 +100,9 @@ MkSGateway.prototype.Connect = function (callback) {
 				header: {
 					message_type: 'HANDSHAKE'
 				},
-				key: self.Key
+				user: {
+					key: self.Key
+				}
 			};
 			console.log('Connected to Gateway ... Sending handshake ...', handshakeMsg);
 			self.WS.send(JSON.stringify(handshakeMsg));
