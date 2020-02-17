@@ -119,18 +119,19 @@ MkSGateway.prototype.Connect = function (callback) {
 			var jsonData = JSON.parse(event.data);
 			
 			if ("GATEWAY" == jsonData.header.source) {
-				console.log(jsonData);
+				console.log("GATEWAY", jsonData);
 				if (self.OnGatewayAdminCallback) {
 					self.OnGatewayAdminCallback(jsonData.data);
 				}
 			} else {
-				console.log("[#2] Identifier #", jsonData.piggybag.identifier, "recieved.", jsonData.data.header.command);
+				// console.log("[#2] Identifier #", jsonData.piggybag.identifier, "recieved.", jsonData.data.header.command);
+				console.log("OTHERS", jsonData);
 				
 				if (self.Callbacks[jsonData.piggybag.identifier]) {
 					handler = self.Callbacks[jsonData.piggybag.identifier];
 					handler.callback(jsonData, {error: "none"});
 					
-					console.log("[#2] Delete Identifier #", jsonData.piggybag.identifier);
+					// console.log("[#2] Delete Identifier #", jsonData.piggybag.identifier);
 					delete self.Callbacks[jsonData.piggybag.identifier];
 
 					if (null != self.OnGatewayConnectedCallback) {
@@ -201,7 +202,7 @@ MkSGateway.prototype.Send = function (type, dest_uuid, cmd, payload, additional,
 											timeout_counter: 0,
 											timeout: 5
 										 };
-	console.log("[#2] Identifier #", this.PacketCounter, "sent.", cmd);
+	// console.log("[#2] Identifier #", this.PacketCounter, "sent.", cmd);
 
 	this.PacketCounter++;
 	if (this.PacketCounter < 1) {

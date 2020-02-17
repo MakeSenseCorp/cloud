@@ -87,11 +87,16 @@ MkSCloud.prototype.Monitor = function() {
 }
 
 MkSCloud.prototype.GetNodesByKey = function(key) {
-	var nodeList 	= this.GatewayNodeList[key];
-	var nodes 		= [];
+	var gatewayNodes 	= this.GatewayNodeList[key];
+	var nodes 			= [];
 
-	for (var i = 0; i < nodeList.length; i++) {
-		nodes = nodes.concat(nodeList[i].nodes);
+	for (var gateway in gatewayNodes) {
+		nodeList = gatewayNodes[gateway];
+		if (nodeList === undefined || nodeList == null) {
+
+		} else {
+			nodes = nodes.concat(nodeList.nodes);
+		}
 	}
 
 	return nodes;
@@ -233,38 +238,41 @@ MkSCloud.prototype.Start = function () {
 		
 		connection.on('close', function(conn) {
 			// Remove application session
-			console.log (self.ModuleName, (new Date()), "Unregister application session:", request.httpRequest.headers.userkey);
-			var gatewaySessions = self.GatewayList[request.httpRequest.headers.userkey];
-			if (gatewaySessions !== undefined) {
-				for (var idx = 0; idx < gatewaySessions.length; idx++) {
-					gatewaySessions[i].Socket.send(JSON.stringify({
-						header: {
-							message_type: "DIRECT",
-							destination: "GATEWAY",
-							source: "CLOUD",
-							direction: "request"
-						},
-						data: {
+			console.log (self.ModuleName, (new Date()), "Unregister application session:", self.WebfaceList[connection.ws_handler].UserKey);
+			if (self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey)) {
+				var gatewaySessions = self.GatewayList[self.WebfaceList[connection.ws_handler].UserKey];
+				if (gatewaySessions !== undefined) {
+					for (var idx = 0; idx < gatewaySessions.length; idx++) {
+						gatewaySessions[idx].Socket.send(JSON.stringify({
 							header: {
-								command: "webface_remove_connection",
-								timestamp: 0
+								message_type: "DIRECT",
+								destination: "GATEWAY",
+								source: "CLOUD",
+								direction: "request"
 							},
-							payload: {	}
-						},
-						user: {
-							key: ""
-						},
-						additional: {
-							cloud: {
-								handler: connection.ws_handler
+							data: {
+								header: {
+									command: "webface_remove_connection",
+									timestamp: 0
+								},
+								payload: {	}
+							},
+							user: {
+								key: ""
+							},
+							additional: {
+								cloud: {
+									handler: connection.ws_handler
+								}
+							},
+							piggybag: {
+								identifier: 0
 							}
-						},
-						piggybag: {
-							identifier: 0
-						}
-					}));
+						}));
+					}
 				}
 			}
+
 			if (connection.ws_handler !== undefined) {
 				// Removing connection from the list.
 				self.WSWebfaceClients.splice(connection.ws_handler, 1); // Consider to remove this list, we have a connections map.
@@ -275,8 +283,8 @@ MkSCloud.prototype.Start = function () {
 	// Register node websocket to request event
 	this.WSGateway.on('request', function(request) {
 		// Accept new connection request
-		var connection = request.accept('echo-protocol', request.origin);
-		var ws_handler = self.WSGatewayClients.push(connection) - 1;
+		var connection 			= request.accept('echo-protocol', request.origin);
+		connection.ws_handler 	= self.WSGatewayClients.push(connection) - 1;
 
 		console.log("\n", self.ModuleName, request.httpRequest.headers, "\n");
 		connection.on('message', function(message) {
@@ -325,14 +333,16 @@ MkSCloud.prototype.Start = function () {
 					sessionList.push(new GatewaySession(connection));
 					self.GatewayList[jsonData.user.key] = sessionList;
 
-					var nodeList = self.GatewayNodeList[jsonData.user.key];
-					if (undefined === nodeList) {
-						nodeList = []
+					var gatewayNodes = self.GatewayNodeList[jsonData.user.key];
+					if (undefined === gatewayNodes) {
+						gatewayNodes = { };
 					}
 
-					jsonData.data.payload.ws_handler = ws_handler;
-					nodeList.push(jsonData.data.payload);
-					self.GatewayNodeList[jsonData.user.key] = nodeList;
+					jsonData.data.payload.ws_handler = connection.ws_handler;
+					gatewayNodes[connection.ws_handler] = jsonData.data.payload;
+					self.GatewayNodeList[jsonData.user.key] = gatewayNodes;
+					// Save gateway's node to this request.
+					request.httpRequest.headers.nodes = jsonData.data.payload;
 
 					// Respond to Gatway with HANDSHAKE message
 					var packet = {
@@ -360,23 +370,23 @@ MkSCloud.prototype.Start = function () {
 				} else {
 					if (jsonData.header.destination == "CLOUD") {
 						switch (jsonData.data.header.command) {
-							case "update_node_list":
-								var nodeList = self.GatewayNodeList[jsonData.user.key];
-								if (undefined === nodeList) {
-									nodeList = []
-								}
-
-								for (item in jsonData.data.payload.nodes) {
-									for (node in nodeList) {
-										if (item.uuid == node.uuid) {
-											node.online = item.uuid;
-											break;
+							case "update_node_list": {
+								if (self.GatewayNodeList.hasOwnProperty(jsonData.user.key)) {
+									var gatewayNodes = self.GatewayNodeList[jsonData.user.key];
+									nodeList = gatewayNodes[connection.ws_handler];
+									for (item in jsonData.data.payload.nodes) {
+										for (node in nodeList) {
+											if (item.uuid == node.uuid) {
+												node.online = item.online;
+												break;
+											}
 										}
 									}
+									
+									self.GatewayNodeList[jsonData.user.key] = nodeList;
 								}
-								
-								self.GatewayNodeList[jsonData.user.key] = nodeList;
 								break;
+							}
 							default:
 								break;
 						}
@@ -395,8 +405,16 @@ MkSCloud.prototype.Start = function () {
 		connection.on('close', function(conn) {
 			// Remove application session
 			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.userkey);
-			// Removing connection from the list.
-			self.WSWebfaceClients.splice(ws_handler, 1); // Consider to remove this list, we have a connections map.
+			if (self.GatewayNodeList.hasOwnProperty(request.httpRequest.headers.userkey)) {
+				var gatewayNodes = self.GatewayNodeList[request.httpRequest.headers.userkey];
+				gatewayNodes[connection.ws_handler] = null;
+				self.GatewayNodeList[jsonData.user.key] = gatewayNodes;
+			}
+
+			if (connection.ws_handler !== undefined) {
+				// Removing connection from the list.
+				self.WSWebfaceClients.splice(connection.ws_handler, 1); // Consider to remove this list, we have a connections map.
+			}
 		});
 	});
 }
