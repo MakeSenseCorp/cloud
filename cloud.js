@@ -123,7 +123,9 @@ MkSCloud.prototype.WebfaceHandshakeRequestToGatewayByKey = function(key, handler
 		}
 	});
 
-	for (var idx = 0; idx < gatewaySessions.length; idx++) {		
+	console.log(this.ModuleName, "Cloud -> Gateway", key, packet);
+	for (var idx = 0; idx < gatewaySessions.length; idx++) {
+		console.log(this.ModuleName, "Cloud -> Gateway", key, gatewaySessions[idx].Socket.ws_handler);
 		gatewaySessions[idx].Socket.send(JSON.stringify(packet));
 	}
 
@@ -158,6 +160,7 @@ MkSCloud.prototype.ProxyPacketToGateway = function(key, packet) {
 	console.log(this.ModuleName, "Proxy message", key);
 	var gatewaySessions = this.GatewayList[key];
 	for (var idx = 0; idx < gatewaySessions.length; idx++) {
+		console.log(this.ModuleName, "Cloud -> Gateway", key, gatewaySessions[idx].Socket.ws_handler);
 		gatewaySessions[idx].Socket.send(JSON.stringify(packet));
 	}
 }
@@ -211,7 +214,7 @@ MkSCloud.prototype.Start = function () {
 			if (message.type === 'utf8') {
 				jsonData = JSON.parse(message.utf8Data);
 
-				console.log("\n", self.ModuleName, "Cloud -> Gateway", jsonData, "\n");
+				console.log("\n", self.ModuleName, "Webface -> Cloud", jsonData, "\n");
 				if (jsonData.header === undefined) {
 					console.log(self.ModuleName, (new Date()), "Invalid request ...");
 					return;
@@ -224,6 +227,7 @@ MkSCloud.prototype.Start = function () {
 				
 				if ("HANDSHAKE" == jsonData.header.message_type) {
 					// Store userkey of this session. LAter will be used to identify gateawy.
+					console.log(self.ModuleName, "Webface -> Cloud [HANDSHAKE]", connection.ws_handler);
 					self.WebfaceList[connection.ws_handler].UserKey = jsonData.user.key;
 					self.WebfaceHandshakeRequestToGatewayByKey(jsonData.user.key, connection.ws_handler);
 				} else {
@@ -231,6 +235,7 @@ MkSCloud.prototype.Start = function () {
 						handler: connection.ws_handler
 					};
 	
+					console.log(self.ModuleName, "Webface -> Cloud [PROXY]");
 					self.ProxyPacketToGateway(self.WebfaceList[connection.ws_handler].UserKey, jsonData);
 				}
 			}
@@ -243,6 +248,7 @@ MkSCloud.prototype.Start = function () {
 				var gatewaySessions = self.GatewayList[self.WebfaceList[connection.ws_handler].UserKey];
 				if (gatewaySessions !== undefined) {
 					for (var idx = 0; idx < gatewaySessions.length; idx++) {
+						console.log (self.ModuleName, "Cloud -> Gateway [REMOVE WEBFACE]", connection.ws_handler);
 						gatewaySessions[idx].Socket.send(JSON.stringify({
 							header: {
 								message_type: "DIRECT",
@@ -258,7 +264,7 @@ MkSCloud.prototype.Start = function () {
 								payload: {	}
 							},
 							user: {
-								key: ""
+								key: self.WebfaceList[connection.ws_handler].UserKey
 							},
 							additional: {
 								cloud: {
@@ -373,17 +379,21 @@ MkSCloud.prototype.Start = function () {
 							case "update_node_list": {
 								if (self.GatewayNodeList.hasOwnProperty(jsonData.user.key)) {
 									var gatewayNodes = self.GatewayNodeList[jsonData.user.key];
-									nodeList = gatewayNodes[connection.ws_handler];
-									for (item in jsonData.data.payload.nodes) {
-										for (node in nodeList) {
-											if (item.uuid == node.uuid) {
-												node.online = item.online;
-												break;
+									if (gatewayNodes === undefined) {
+										console.log (self.ModuleName, (new Date()), "Unregister gateway session: No data for this handler -", connection.ws_handler);
+									} else {
+										nodeList = gatewayNodes[connection.ws_handler];
+										for (item in jsonData.data.payload.nodes) {
+											for (node in nodeList) {
+												if (item.uuid == node.uuid) {
+													node.online = item.online;
+													break;
+												}
 											}
 										}
+										
+										self.GatewayNodeList[jsonData.user.key] = nodeList;
 									}
-									
-									self.GatewayNodeList[jsonData.user.key] = nodeList;
 								}
 								break;
 							}
@@ -407,8 +417,12 @@ MkSCloud.prototype.Start = function () {
 			console.log (self.ModuleName, (new Date()), "Unregister gateway session:", request.httpRequest.headers.userkey);
 			if (self.GatewayNodeList.hasOwnProperty(request.httpRequest.headers.userkey)) {
 				var gatewayNodes = self.GatewayNodeList[request.httpRequest.headers.userkey];
-				gatewayNodes[connection.ws_handler] = null;
-				self.GatewayNodeList[jsonData.user.key] = gatewayNodes;
+				if (gatewayNodes === undefined) {
+					console.log (self.ModuleName, (new Date()), "Unregister gateway session: No data for this handler -", connection.ws_handler);
+				} else {
+					gatewayNodes[connection.ws_handler] = null;
+					self.GatewayNodeList[jsonData.user.key] = gatewayNodes;
+				}
 			}
 
 			if (connection.ws_handler !== undefined) {

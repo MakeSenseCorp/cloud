@@ -45,12 +45,11 @@ MkSWebface.prototype.InitRouter = function (server) {
 	var self = this;
 	
 	server.post('/api/get/nodes', function(req, res) {
-		console.log(self.ModuleName, "/api/get/nodes");
+		//console.log(self.ModuleName, "/api/get/nodes");
 		if (req.body.data != undefined) {
 			var user_id  = req.body.data.user_id;
 			var user_key = req.body.data.key;
 			nodes = self.Cloud.GetNodesByKey(user_key);
-			console.log(nodes);
 			res.json({error:"none", nodes: {
 				status: "OK",
 				data: nodes
