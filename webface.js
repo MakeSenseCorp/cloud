@@ -50,6 +50,7 @@ MkSWebface.prototype.InitRouter = function (server) {
 			var user_id  = req.body.data.user_id;
 			var user_key = req.body.data.key;
 			nodes = self.Cloud.GetNodesByKey(user_key);
+			console.log(nodes);
 			res.json({error:"none", nodes: {
 				status: "OK",
 				data: nodes

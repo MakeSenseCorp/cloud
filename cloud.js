@@ -67,6 +67,9 @@ function MkSCloud (cloudInfo) {
 	
 	// Each 10 minutes send keepalive packet
 	this.KeepaliveMonitor = setInterval(this.KeepAliveMonitorHandler.bind(this), 10 * 60 * 1000);
+
+	// Each 10 second print connected sessions
+	this.SessionsMonitor = setInterval(this.SessionsMonitorHandler.bind(this), 10 * 1 * 1000);
 	
 	return this;
 }
@@ -77,6 +80,23 @@ MkSCloud.prototype.InitRouter = function (server) {
 
 MkSCloud.prototype.KeepAliveMonitorHandler = function () {
 	console.log(this.ModuleName, "KeepAliveMonitorHandler");
+}
+
+MkSCloud.prototype.SessionsMonitorHandler = function () {
+	console.log(this.ModuleName, "Gateway Connected Sessions:");
+	for (key in this.GatewayList) {
+		var gateways = this.GatewayList[key];
+		for (var i = 0; i < gateways.length; i++) {
+			gateway = gateways[i];
+			console.log(this.ModuleName, "\t", key, gateway.Socket.ws_handler);
+		}
+	}
+
+	console.log(this.ModuleName, "Application Connected Sessions:");
+	for (key in this.WebfaceList) {
+		var app = this.WebfaceList[key];
+		console.log(this.ModuleName, "\t", app.UserKey, app.Socket.ws_handler);
+	}
 }
 
 MkSCloud.prototype.Monitor = function() {
@@ -95,6 +115,7 @@ MkSCloud.prototype.GetNodesByKey = function(key) {
 		if (nodeList === undefined || nodeList == null) {
 
 		} else {
+			console.log(nodeList);
 			nodes = nodes.concat(nodeList.nodes);
 		}
 	}
@@ -209,6 +230,7 @@ MkSCloud.prototype.Start = function () {
 		var connection 		  = request.accept('echo-protocol', request.origin);
 		connection.ws_handler = self.WSWebfaceClients.push(connection) - 1;
 
+		console.log("DEBUG [NEW SOCK]", connection.ws_handler);
 		self.WebfaceList[connection.ws_handler] = new WebfaceSession(connection);
 		connection.on('message', function(message) {
 			if (message.type === 'utf8') {
@@ -242,8 +264,11 @@ MkSCloud.prototype.Start = function () {
 		});
 		
 		connection.on('close', function(conn) {
+			console.log("DEBUG [REMOVE SOCK]", connection.ws_handler);
 			// Remove application session
-			console.log (self.ModuleName, (new Date()), "Unregister application session:", self.WebfaceList[connection.ws_handler].UserKey);
+			console.log (self.ModuleName, (new Date()), "Unregister application session:", 
+				self.WebfaceList[connection.ws_handler].UserKey, 
+				self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey));
 			if (self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey)) {
 				var gatewaySessions = self.GatewayList[self.WebfaceList[connection.ws_handler].UserKey];
 				if (gatewaySessions !== undefined) {
@@ -278,6 +303,8 @@ MkSCloud.prototype.Start = function () {
 					}
 				}
 			}
+
+			delete self.WebfaceList[connection.ws_handler];
 
 			if (connection.ws_handler !== undefined) {
 				// Removing connection from the list.
@@ -380,19 +407,9 @@ MkSCloud.prototype.Start = function () {
 								if (self.GatewayNodeList.hasOwnProperty(jsonData.user.key)) {
 									var gatewayNodes = self.GatewayNodeList[jsonData.user.key];
 									if (gatewayNodes === undefined) {
-										console.log (self.ModuleName, (new Date()), "Unregister gateway session: No data for this handler -", connection.ws_handler);
+										console.log (self.ModuleName, (new Date()), "[update_node_list] No data for this handler -", connection.ws_handler);
 									} else {
-										nodeList = gatewayNodes[connection.ws_handler];
-										for (item in jsonData.data.payload.nodes) {
-											for (node in nodeList) {
-												if (item.uuid == node.uuid) {
-													node.online = item.online;
-													break;
-												}
-											}
-										}
-										
-										self.GatewayNodeList[jsonData.user.key] = nodeList;
+										gatewayNodes[connection.ws_handler] = jsonData.data.payload;
 									}
 								}
 								break;
@@ -420,9 +437,23 @@ MkSCloud.prototype.Start = function () {
 				if (gatewayNodes === undefined) {
 					console.log (self.ModuleName, (new Date()), "Unregister gateway session: No data for this handler -", connection.ws_handler);
 				} else {
-					gatewayNodes[connection.ws_handler] = null;
-					self.GatewayNodeList[jsonData.user.key] = gatewayNodes;
+					delete gatewayNodes[connection.ws_handler];
+					self.GatewayNodeList[request.httpRequest.headers.userkey] = gatewayNodes;
 				}
+			}
+
+			// Remove gateway from list of gateways for this user key
+			var sessionList = self.GatewayList[request.httpRequest.headers.userkey];
+			var idxToDelete = -1;
+			for (var i = 0; i < sessionList.length; i++) {
+				if (sessionList[i].Socket.ws_handler == connection.ws_handler) {
+					idxToDelete = i;
+					break;
+				}
+			}
+			if (idxToDelete > -1) {
+				sessionList.splice(idxToDelete, 1);
+				self.GatewayList[jsonData.user.key] = sessionList;
 			}
 
 			if (connection.ws_handler !== undefined) {
