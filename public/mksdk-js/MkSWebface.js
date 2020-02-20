@@ -1,7 +1,7 @@
 function MkSWebface () {
 	self = this;
 	
-	this.RestAPIPort 		= 8083;
+	this.RestAPIPort 		= 80;
 	this.RestAPIUrl 		= "http://" + MkSGlobal.MakeSenseDomain;
 	this.RestAPIFullUrl 	= this.RestAPIUrl.concat(":", this.RestAPIPort);
 	this.WSState 			= "DISCONN";

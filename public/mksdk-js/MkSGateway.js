@@ -3,8 +3,8 @@ function MkSGateway (key) {
 	
 	this.WS 				= null;
 	this.Key 				= key;
-	this.RestAPIPort 		= 8084;
-	this.WSServerPort		= 1983;
+	this.RestAPIPort 		= 80;
+	this.WSServerPort		= 8080;
 	this.RestAPIUrl 		= "http://" + MkSGlobal.MakeSenseDomain;
 	this.WSServerUrl		= "ws://" + MkSGlobal.MakeSenseDomain;
 	this.RestAPIFullUrl 	= this.RestAPIUrl.concat(":", this.RestAPIPort);

@@ -3,13 +3,13 @@ const Webface 	= require('./webface.js')();
 
 // Params for webface instance
 var WebfaceInfo = {
-	"RestAPIPort": 8083
+	"RestAPIPort": 80
 };
 // Params for gateway instance
 var CloudInfo = {
-	"GatewayWebSocket": 2000,
-	"WebfaceWebSocket": 1983,
-	"CloudRestApi":	8084
+	"GatewayWebSocket": 443,
+	"WebfaceWebSocket": 8080,
+	"CloudRestApi":	85
 };
 
 // Create cloud instance
