@@ -258,6 +258,7 @@ MkSCloud.prototype.Start = function () {
 					};
 	
 					console.log(self.ModuleName, "Webface -> Cloud [PROXY]");
+					jsonData.stamping.push("cloud_t");
 					self.ProxyPacketToGateway(self.WebfaceList[connection.ws_handler].UserKey, jsonData);
 				}
 			}
@@ -420,8 +421,7 @@ MkSCloud.prototype.Start = function () {
 					} else {
 						// TODO - Develope gateway to webface
 						if (jsonData.piggybag.cloud !== undefined) {
-							jsonData.stamping.push("cloud_t");
-							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(JSON.stringify(jsonData));
+							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(message.utf8Data);
 						} else {
 							console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud]", jsonData);
 						}
