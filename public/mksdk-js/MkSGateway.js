@@ -194,7 +194,8 @@ MkSGateway.prototype.Send = function (type, dest_uuid, cmd, payload, additional,
 		additional: additional,
 		piggybag: {
 			identifier: this.PacketCounter
-		}
+		},
+		stamping: []
 	}
 	
 	this.Callbacks[this.PacketCounter] = { 

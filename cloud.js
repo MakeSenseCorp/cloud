@@ -420,7 +420,8 @@ MkSCloud.prototype.Start = function () {
 					} else {
 						// TODO - Develope gateway to webface
 						if (jsonData.piggybag.cloud !== undefined) {
-							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(message.utf8Data);
+							jsonData.stamping.push("cloud_t");
+							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(JSON.stringify(jsonData));
 						} else {
 							console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud]", jsonData);
 						}
