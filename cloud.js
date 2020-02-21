@@ -420,10 +420,15 @@ MkSCloud.prototype.Start = function () {
 						}
 					} else {
 						// TODO - Develope gateway to webface
-						if (jsonData.piggybag.cloud !== undefined) {
-							self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(message.utf8Data);
+						if (jsonData.piggybag.cloud !== undefined && jsonData.piggybag.cloud != null) {
+							var session = self.WebfaceList[jsonData.piggybag.cloud.handler];
+							if (session !== undefined && session != null) {
+								self.WebfaceList[jsonData.piggybag.cloud.handler].Socket.send(message.utf8Data);
+							} else {
+								console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud] - Session is undefined", jsonData);
+							}
 						} else {
-							console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud]", jsonData);
+							console.log(self.ModuleName, (new Date()), "[ERROR - Proxy to Cloud] - Cloud data undefined", jsonData);
 						}
 					}
 				}
