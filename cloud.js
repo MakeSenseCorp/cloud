@@ -445,15 +445,17 @@ MkSCloud.prototype.Start = function () {
 			// Remove gateway from list of gateways for this user key
 			var sessionList = self.GatewayList[request.httpRequest.headers.userkey];
 			var idxToDelete = -1;
-			for (var i = 0; i < sessionList.length; i++) {
-				if (sessionList[i].Socket.ws_handler == connection.ws_handler) {
-					idxToDelete = i;
-					break;
+			if (sessionList != null && sessionList !== undefined) {
+				for (var i = 0; i < sessionList.length; i++) {
+					if (sessionList[i].Socket.ws_handler == connection.ws_handler) {
+						idxToDelete = i;
+						break;
+					}
 				}
-			}
-			if (idxToDelete > -1) {
-				sessionList.splice(idxToDelete, 1);
-				self.GatewayList[jsonData.user.key] = sessionList;
+				if (idxToDelete > -1) {
+					sessionList.splice(idxToDelete, 1);
+					self.GatewayList[jsonData.user.key] = sessionList;
+				}
 			}
 
 			if (connection.ws_handler !== undefined) {
