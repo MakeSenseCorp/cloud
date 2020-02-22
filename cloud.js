@@ -279,46 +279,50 @@ MkSCloud.prototype.Start = function () {
 		
 		connection.on('close', function(conn) {
 			console.log("DEBUG [REMOVE SOCK]", connection.ws_handler);
-			// Remove application session
-			console.log (self.ModuleName, (new Date()), "Unregister application session:", 
-				self.WebfaceList[connection.ws_handler].UserKey, 
-				self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey));
-			if (self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey)) {
-				var gatewaySessions = self.GatewayList[self.WebfaceList[connection.ws_handler].UserKey];
-				if (gatewaySessions !== undefined) {
-					for (var idx = 0; idx < gatewaySessions.length; idx++) {
-						console.log (self.ModuleName, "Cloud -> Gateway [REMOVE WEBFACE]", connection.ws_handler);
-						gatewaySessions[idx].Socket.send(JSON.stringify({
-							header: {
-								message_type: "DIRECT",
-								destination: "GATEWAY",
-								source: "CLOUD",
-								direction: "request"
-							},
-							data: {
+			if (self.WebfaceList[connection.ws_handler] !== undefined && self.WebfaceList[connection.ws_handler] != null) {
+				// Remove application session
+				console.log (self.ModuleName, (new Date()), "Unregister application session:", 
+					self.WebfaceList[connection.ws_handler].UserKey, 
+					self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey));
+				if (self.GatewayList.hasOwnProperty(self.WebfaceList[connection.ws_handler].UserKey)) {
+					var gatewaySessions = self.GatewayList[self.WebfaceList[connection.ws_handler].UserKey];
+					if (gatewaySessions !== undefined) {
+						for (var idx = 0; idx < gatewaySessions.length; idx++) {
+							console.log (self.ModuleName, "Cloud -> Gateway [REMOVE WEBFACE]", connection.ws_handler);
+							gatewaySessions[idx].Socket.send(JSON.stringify({
 								header: {
-									command: "webface_remove_connection",
-									timestamp: 0
+									message_type: "DIRECT",
+									destination: "GATEWAY",
+									source: "CLOUD",
+									direction: "request"
 								},
-								payload: {	}
-							},
-							user: {
-								key: self.WebfaceList[connection.ws_handler].UserKey
-							},
-							additional: {
-								cloud: {
-									handler: connection.ws_handler
+								data: {
+									header: {
+										command: "webface_remove_connection",
+										timestamp: 0
+									},
+									payload: {	}
+								},
+								user: {
+									key: self.WebfaceList[connection.ws_handler].UserKey
+								},
+								additional: {
+									cloud: {
+										handler: connection.ws_handler
+									}
+								},
+								piggybag: {
+									identifier: 0
 								}
-							},
-							piggybag: {
-								identifier: 0
-							}
-						}));
+							}));
+						}
 					}
 				}
-			}
 
-			delete self.WebfaceList[connection.ws_handler];
+				delete self.WebfaceList[connection.ws_handler];
+			} else {
+				console.log(self.ModuleName, "[ERROR] - Session not available", connection.ws_handler);
+			}
 
 			if (connection.ws_handler !== undefined) {
 				// Removing connection from the list.
