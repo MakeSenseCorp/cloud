@@ -92,10 +92,23 @@ MkSCloud.prototype.SessionsMonitorHandler = function () {
 		}
 	}
 
+	var toDelete = [];
 	console.log(this.ModuleName, "Application Connected Sessions:");
 	for (key in this.WebfaceList) {
 		var app = this.WebfaceList[key];
-		console.log(this.ModuleName, "\t", app.UserKey, app.Socket.ws_handler);
+		if (app.UserKey == "") {
+			toDelete.push(key);
+		}
+
+		if (app === undefined || app == null) {
+
+		} else {
+			console.log(this.ModuleName, "\t", app.UserKey, app.Socket.ws_handler);
+		}
+	}
+
+	for (key in toDelete) {
+		delete this.WebfaceList[key];
 	}
 }
 
